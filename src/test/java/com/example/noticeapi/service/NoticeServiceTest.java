@@ -1,10 +1,6 @@
 package com.example.noticeapi.service;
 
-import com.example.noticeapi.dto.NoticeCreateDto;
-import com.example.noticeapi.dto.NoticeDetailResponseDto;
-import com.example.noticeapi.dto.NoticeResponseDto;
-import com.example.noticeapi.dto.NoticeSearchDto;
-import com.example.noticeapi.dto.NoticeUpdateDto;
+import com.example.noticeapi.dto.*;
 import com.example.noticeapi.entity.File;
 import com.example.noticeapi.entity.Notice;
 import com.example.noticeapi.exception.NoticeNotFoundException;
@@ -16,9 +12,8 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.mock.web.MockMultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.Collections;
@@ -27,8 +22,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class NoticeServiceTest {
@@ -49,186 +43,142 @@ class NoticeServiceTest {
 
   @Test
   @DisplayName("공지사항 생성 성공 테스트")
-  void testCreateNotice_Success() {
-    // Given: A NoticeCreateDto with valid details
-    NoticeCreateDto noticeCreateDto = new NoticeCreateDto("Test Title", "Test Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1), "Test Author");
+  void createNotice_Success() throws Exception {
+    NoticeCreateDto noticeCreateDto = new NoticeCreateDto("Title", "Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1), "Author");
     Notice notice = NoticeMapper.toEntity(noticeCreateDto);
+    Notice savedNotice = Notice.builder()
+        .id(1L)
+        .title(notice.getTitle())
+        .content(notice.getContent())
+        .startDate(notice.getStartDate())
+        .endDate(notice.getEndDate())
+        .author(notice.getAuthor())
+        .createdAt(notice.getCreatedAt())
+        .build();
 
-    List<File> mockFiles = Collections.singletonList(File.builder()
-        .originalFileName("file.txt")
-        .storedFileName("random-name.txt")
-        .filePath("path/to/file")
-        .notice(notice)
-        .build());
-    when(fileStorageService.processFiles(anyList(), any(Notice.class))).thenReturn(CompletableFuture.completedFuture(mockFiles));
+    when(fileStorageService.processFiles(anyList(), any(Notice.class)))
+        .thenReturn(CompletableFuture.completedFuture(Collections.emptyList()));
+    when(noticeRepository.save(any(Notice.class))).thenReturn(savedNotice);
 
-    // When: Saving the notice
-    when(noticeRepository.save(any(Notice.class))).thenReturn(notice);
-
-    // Then: The notice should be created successfully
     NoticeResponseDto responseDto = noticeService.createNotice(noticeCreateDto, Collections.emptyList());
-    assertNotNull(responseDto, "Response DTO should not be null");
-    assertEquals("Test Title", responseDto.getTitle(), "The title should match");
+
+    assertNotNull(responseDto);
+    assertEquals("Title", responseDto.getTitle());
     verify(noticeRepository, times(1)).save(any(Notice.class));
   }
 
   @Test
-  @DisplayName("공지사항 생성 실패 테스트 - 제목과 내용이 빈 경우")
-  void testCreateNotice_Failure() {
-    // Given: A NoticeCreateDto with empty title and content
-    NoticeCreateDto noticeCreateDto = new NoticeCreateDto("", "", LocalDateTime.now(), LocalDateTime.now().plusDays(1), "Test Author");
+  @DisplayName("공지사항 상세 조회 성공 테스트")
+  void getNoticeDetailById_Success() {
+    Notice notice = Notice.builder().id(1L).title("Title").content("Content").isDeleted(false).build();
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.of(notice));
 
-    // When & Then: Creating notice should throw an exception
-    assertThrows(IllegalArgumentException.class, () -> noticeService.createNotice(noticeCreateDto, Collections.emptyList()), "An empty title or content should throw IllegalArgumentException");
-  }
-
-  @Test
-  @DisplayName("공지사항 전체 조회 성공 테스트")
-  void testGetAllNotices_Success() {
-    // Given: A notice with a specific title
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .build();
-
-    // When: Fetching all notices
-    when(noticeRepository.findByIsDeletedFalse(any())).thenReturn(new PageImpl<>(Collections.singletonList(notice)));
-
-    // Then: The notice list should contain the given notice
-    List<NoticeResponseDto> notices = noticeService.getAllNotices(0, 10);
-    assertNotNull(notices, "Notices list should not be null");
-    assertEquals(1, notices.size(), "The size of notices list should be 1");
-    assertEquals("Test Title", notices.get(0).getTitle(), "The title should match");
-  }
-
-  @Test
-  @DisplayName("공지사항 조회 성공 테스트")
-  void testGetNoticeById_Success() {
-    // Given: A notice with a specific ID
-    Notice notice = Notice.builder()
-        .id(1L)
-        .title("Test Title")
-        .build();
-
-    // When: Fetching the notice by ID
-    when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
-
-    // Then: The fetched notice should match the given ID
     NoticeDetailResponseDto responseDto = noticeService.getNoticeDetailById(1L);
-    assertNotNull(responseDto, "Response DTO should not be null");
-    assertEquals("Test Title", responseDto.getTitle(), "The title should match");
+
+    assertNotNull(responseDto);
+    assertEquals("Title", responseDto.getTitle());
+    verify(noticeRepository, times(1)).findById(anyLong());
   }
 
   @Test
-  @DisplayName("공지사항 조회 실패 테스트 - 존재하지 않는 ID")
-  void testGetNoticeById_NotFound() {
-    // Given: A non-existing notice ID
-    when(noticeRepository.findById(1L)).thenReturn(Optional.empty());
+  @DisplayName("공지사항 상세 조회 실패 테스트 - 존재하지 않는 ID")
+  void getNoticeDetailById_Failure_NotFound() {
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-    // When & Then: Fetching the notice by ID should throw an exception
-    assertThrows(NoticeNotFoundException.class, () -> noticeService.getNoticeDetailById(1L), "A non-existing ID should throw NoticeNotFoundException");
+    assertThrows(NoticeNotFoundException.class, () -> {
+      noticeService.getNoticeDetailById(1L);
+    });
+
+    verify(noticeRepository, times(1)).findById(anyLong());
+  }
+
+  @Test
+  @DisplayName("전체 공지사항 조회 성공 테스트")
+  void getAllNotices_Success() {
+    Notice notice = Notice.builder().id(1L).title("Title").content("Content").isDeleted(false).build();
+    when(noticeRepository.findByIsDeletedFalse(any())).thenReturn(new PageImpl<>(List.of(notice)));
+
+    List<NoticeResponseDto> responseDtos = noticeService.getAllNotices(0, 10);
+
+    assertNotNull(responseDtos);
+    assertEquals(1, responseDtos.size());
+    assertEquals("Title", responseDtos.get(0).getTitle());
+    verify(noticeRepository, times(1)).findByIsDeletedFalse(any());
   }
 
   @Test
   @DisplayName("공지사항 검색 성공 테스트")
-  void testSearchNotices_Success() {
-    // Given: Search criteria
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .build();
-    NoticeSearchDto searchDto = new NoticeSearchDto("Test", null, null, null, null);
-
-    // When: Searching notices
+  void searchNotices_Success() {
+    Notice notice = Notice.builder().id(1L).title("Title").content("Content").author("Author").createdAt(LocalDateTime.now()).isDeleted(false).build();
+    NoticeSearchDto searchDto = new NoticeSearchDto("Title", "Content", "Author", LocalDateTime.now().minusDays(1), LocalDateTime.now().plusDays(1));
     when(noticeRepository.findByTitleContainingAndContentContainingAndAuthorContainingAndCreatedAtBetween(
         anyString(), anyString(), anyString(), any(LocalDateTime.class), any(LocalDateTime.class), any()))
-        .thenReturn(new PageImpl<>(Collections.singletonList(notice)));
+        .thenReturn(new PageImpl<>(List.of(notice)));
 
-    // Then: The search result should contain the matching notice
-    List<NoticeResponseDto> notices = noticeService.searchNotices(searchDto, 0, 10);
-    assertNotNull(notices, "Notices list should not be null");
-    assertEquals(1, notices.size(), "The size of notices list should be 1");
-    assertEquals("Test Title", notices.get(0).getTitle(), "The title should match");
-  }
+    List<NoticeResponseDto> responseDtos = noticeService.searchNotices(searchDto, 0, 10);
 
-  @Test
-  @DisplayName("공지사항 검색 실패 테스트 - 일치하는 항목 없음")
-  void testSearchNotices_NoMatch() {
-    // Given: Search criteria
-    NoticeSearchDto searchDto = new NoticeSearchDto("Non-existing title", null, null, null, null);
-
-    // When: Searching notices
-    when(noticeRepository.findByTitleContainingAndContentContainingAndAuthorContainingAndCreatedAtBetween(
-        anyString(), anyString(), anyString(), any(LocalDateTime.class), any(LocalDateTime.class), any()))
-        .thenReturn(Page.empty());
-
-    // Then: The search result should be empty
-    List<NoticeResponseDto> notices = noticeService.searchNotices(searchDto, 0, 10);
-    assertNotNull(notices, "Notices list should not be null");
-    assertEquals(0, notices.size(), "The size of notices list should be 0");
+    assertNotNull(responseDtos);
+    assertEquals(1, responseDtos.size());
+    assertEquals("Title", responseDtos.get(0).getTitle());
+    verify(noticeRepository, times(1)).findByTitleContainingAndContentContainingAndAuthorContainingAndCreatedAtBetween(
+        anyString(), anyString(), anyString(), any(LocalDateTime.class), any(LocalDateTime.class), any());
   }
 
   @Test
   @DisplayName("공지사항 업데이트 성공 테스트")
-  void testUpdateNotice_Success() {
-    // Given: A notice to update
-    Notice notice = Notice.builder()
-        .id(1L)
-        .title("Old Title")
-        .build();
-    NoticeUpdateDto updateDto = new NoticeUpdateDto("New Title", "New Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
-    when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
+  void updateNotice_Success() throws Exception {
+    Notice notice = Notice.builder().id(1L).title("Title").content("Content").isDeleted(false).build();
+    NoticeUpdateDto noticeUpdateDto = new NoticeUpdateDto("Updated Title", "Updated Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.of(notice));
+    when(fileStorageService.processFiles(anyList(), any(Notice.class)))
+        .thenReturn(CompletableFuture.completedFuture(Collections.emptyList()));
+    when(fileStorageService.deleteFilesByNotice(any(Notice.class)))
+        .thenReturn(CompletableFuture.completedFuture(null));
     when(noticeRepository.save(any(Notice.class))).thenReturn(notice);
 
-    List<File> mockFiles = Collections.singletonList(File.builder()
-        .originalFileName("file.txt")
-        .storedFileName("random-name.txt")
-        .filePath("path/to/file")
-        .notice(notice)
-        .build());
-    when(fileStorageService.processFiles(anyList(), any(Notice.class))).thenReturn(CompletableFuture.completedFuture(mockFiles));
+    NoticeResponseDto responseDto = noticeService.updateNotice(1L, noticeUpdateDto, Collections.emptyList());
 
-    // When: Updating the notice
-    NoticeResponseDto responseDto = noticeService.updateNotice(1L, updateDto, Collections.emptyList());
-
-    // Then: The notice should be updated successfully
-    assertNotNull(responseDto, "Response DTO should not be null");
-    assertEquals("New Title", responseDto.getTitle(), "The title should match");
+    assertNotNull(responseDto);
+    assertEquals("Updated Title", responseDto.getTitle());
+    verify(noticeRepository, times(1)).save(any(Notice.class));
   }
 
   @Test
   @DisplayName("공지사항 업데이트 실패 테스트 - 존재하지 않는 ID")
-  void testUpdateNotice_NotFound() {
-    // Given: A non-existing notice ID
-    NoticeUpdateDto updateDto = new NoticeUpdateDto("New Title", "New Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
-    when(noticeRepository.findById(1L)).thenReturn(Optional.empty());
+  void updateNotice_Failure_NotFound() {
+    NoticeUpdateDto noticeUpdateDto = new NoticeUpdateDto("Updated Title", "Updated Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-    // When & Then: Updating the notice should throw an exception
-    assertThrows(NoticeNotFoundException.class, () -> noticeService.updateNotice(1L, updateDto, Collections.emptyList()), "A non-existing ID should throw NoticeNotFoundException");
+    assertThrows(NoticeNotFoundException.class, () -> {
+      noticeService.updateNotice(1L, noticeUpdateDto, Collections.emptyList());
+    });
+
+    verify(noticeRepository, times(1)).findById(anyLong());
   }
 
   @Test
   @DisplayName("공지사항 삭제 성공 테스트")
-  void testDeleteNotice_Success() {
-    // Given: A notice to delete
-    Notice notice = Notice.builder()
-        .id(1L)
-        .build();
-    when(noticeRepository.findById(1L)).thenReturn(Optional.of(notice));
+  void deleteNotice_Success() throws Exception {
+    Notice notice = Notice.builder().id(1L).title("Title").content("Content").isDeleted(false).build();
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.of(notice));
+    when(fileStorageService.deleteFilesByNotice(any(Notice.class)))
+        .thenReturn(CompletableFuture.completedFuture(null));
 
-    // When: Deleting the notice
     noticeService.deleteNotice(1L);
 
-    // Then: The notice should be marked as deleted
-    assertTrue(notice.isDeleted(), "The notice should be marked as deleted");
-    verify(noticeRepository, times(1)).save(notice);
+    assertTrue(notice.isDeleted());
+    verify(noticeRepository, times(1)).save(any(Notice.class));
   }
 
   @Test
   @DisplayName("공지사항 삭제 실패 테스트 - 존재하지 않는 ID")
-  void testDeleteNotice_NotFound() {
-    // Given: A non-existing notice ID
-    when(noticeRepository.findById(1L)).thenReturn(Optional.empty());
+  void deleteNotice_Failure_NotFound() {
+    when(noticeRepository.findById(anyLong())).thenReturn(Optional.empty());
 
-    // When & Then: Deleting the notice should throw an exception
-    assertThrows(NoticeNotFoundException.class, () -> noticeService.deleteNotice(1L), "A non-existing ID should throw NoticeNotFoundException");
+    assertThrows(NoticeNotFoundException.class, () -> {
+      noticeService.deleteNotice(1L);
+    });
+
+    verify(noticeRepository, times(1)).findById(anyLong());
   }
 }

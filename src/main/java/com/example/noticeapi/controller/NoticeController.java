@@ -7,13 +7,21 @@ import com.example.noticeapi.dto.NoticeSearchDto;
 import com.example.noticeapi.dto.NoticeUpdateDto;
 import com.example.noticeapi.service.NoticeService;
 import java.time.LocalDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.util.List;
 
 @RestController
 @RequestMapping("/notices")
@@ -23,10 +31,11 @@ public class NoticeController {
   private final NoticeService noticeService;
 
   @PostMapping
-  public ResponseEntity<NoticeResponseDto> createNotice(@RequestPart("notice") NoticeCreateDto noticeCreateDto,
+  public ResponseEntity<NoticeResponseDto> createNotice(
+      @RequestPart("notice") @Validated NoticeCreateDto noticeCreateDto,
       @RequestPart("files") List<MultipartFile> files) {
-    NoticeResponseDto createdNotice = noticeService.createNotice(noticeCreateDto, files);
-    return new ResponseEntity<>(createdNotice, HttpStatus.CREATED);
+    NoticeResponseDto responseDto = noticeService.createNotice(noticeCreateDto, files);
+    return new ResponseEntity<>(responseDto, HttpStatus.CREATED);
   }
 
   @GetMapping
@@ -52,17 +61,19 @@ public class NoticeController {
       @RequestParam(required = false) LocalDateTime endDate,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "10") int size) {
-    NoticeSearchDto noticeSearchDto = new NoticeSearchDto(title, content, author, startDate, endDate);
+    NoticeSearchDto noticeSearchDto = new NoticeSearchDto(title, content, author, startDate,
+        endDate);
     List<NoticeResponseDto> notices = noticeService.searchNotices(noticeSearchDto, page, size);
     return new ResponseEntity<>(notices, HttpStatus.OK);
   }
 
   @PutMapping("/{id}")
-  public ResponseEntity<NoticeResponseDto> updateNotice(@PathVariable Long id,
-      @RequestPart("notice") NoticeUpdateDto noticeUpdateDto,
+  public ResponseEntity<NoticeResponseDto> updateNotice(
+      @PathVariable Long id,
+      @RequestPart("notice") @Validated NoticeUpdateDto noticeUpdateDto,
       @RequestPart("files") List<MultipartFile> files) {
-    NoticeResponseDto updatedNotice = noticeService.updateNotice(id, noticeUpdateDto, files);
-    return new ResponseEntity<>(updatedNotice, HttpStatus.OK);
+    NoticeResponseDto responseDto = noticeService.updateNotice(id, noticeUpdateDto, files);
+    return new ResponseEntity<>(responseDto, HttpStatus.OK);
   }
 
   @DeleteMapping("/{id}")

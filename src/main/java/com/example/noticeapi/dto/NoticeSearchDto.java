@@ -2,10 +2,12 @@ package com.example.noticeapi.dto;
 
 import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Builder;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-@Data
+@Getter
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class NoticeSearchDto {

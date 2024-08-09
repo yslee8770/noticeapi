@@ -1,270 +1,303 @@
 package com.example.noticeapi.controller;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.example.noticeapi.dto.NoticeCreateDto;
 import com.example.noticeapi.dto.NoticeDetailResponseDto;
 import com.example.noticeapi.dto.NoticeResponseDto;
 import com.example.noticeapi.dto.NoticeSearchDto;
 import com.example.noticeapi.dto.NoticeUpdateDto;
+import com.example.noticeapi.entity.File;
 import com.example.noticeapi.entity.Notice;
-import com.example.noticeapi.repository.NoticeRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.example.noticeapi.exception.GlobalExceptionHandler;
+import com.example.noticeapi.exception.NoticeNotFoundException;
+import com.example.noticeapi.service.FileStorageService;
+import com.example.noticeapi.service.NoticeService;
+import java.time.LocalDateTime;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
-import java.time.LocalDateTime;
-
-import static org.junit.jupiter.api.Assertions.*;
-
-@ExtendWith(SpringExtension.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class NoticeControllerTest {
 
-  @LocalServerPort
-  private int port;
+  @Mock
+  private NoticeService noticeService;
 
-  @Autowired
-  private TestRestTemplate restTemplate;
+  @Mock
+  private FileStorageService fileStorageService;
 
-  @Autowired
-  private NoticeRepository noticeRepository;
+  @InjectMocks
+  private NoticeController noticeController;
+
+  private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    noticeRepository.deleteAll();
+    MockitoAnnotations.openMocks(this);
+    mockMvc = MockMvcBuilders.standaloneSetup(noticeController)
+        .setControllerAdvice(new GlobalExceptionHandler())
+        .build();
+
+    CompletableFuture<Void> mockFutureVoid = CompletableFuture.completedFuture(null);
+    CompletableFuture<List<File>> mockFutureFiles = CompletableFuture.completedFuture(
+        Collections.emptyList());
+
+    when(fileStorageService.deleteFilesByNotice(any(Notice.class))).thenReturn(mockFutureVoid);
+    when(fileStorageService.processFiles(anyList(), any(Notice.class))).thenReturn(mockFutureFiles);
   }
 
   @Test
-  @DisplayName("공지사항 생성 성공 통합 테스트")
-  void testCreateNotice_Success() {
-    // Given: A NoticeCreateDto with valid details
-    NoticeCreateDto noticeCreateDto = new NoticeCreateDto("Test Title", "Test Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1), "Test Author");
-    HttpHeaders headers = new HttpHeaders();
-    headers.set("Content-Type", "application/json");
-
-    HttpEntity<NoticeCreateDto> request = new HttpEntity<>(noticeCreateDto, headers);
-
-    // When: Sending POST request to create a notice
-    ResponseEntity<NoticeResponseDto> response = restTemplate.postForEntity("http://localhost:" + port + "/notices", request, NoticeResponseDto.class);
-
-    // Then: The notice should be created successfully
-    assertEquals(201, response.getStatusCodeValue(), "The status code should be 201 CREATED");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals("Test Title", response.getBody().getTitle(), "The title should match");
-  }
-
-  @Test
-  @DisplayName("공지사항 생성 실패 통합 테스트 - 잘못된 입력")
-  void testCreateNotice_Failure() {
-    // Given: A NoticeCreateDto with empty title and content
-    NoticeCreateDto noticeCreateDto = new NoticeCreateDto("", "", LocalDateTime.now(), LocalDateTime.now().plusDays(1), "Test Author");
-    HttpHeaders headers = new HttpHeaders();
-    headers.set("Content-Type", "application/json");
-
-    HttpEntity<NoticeCreateDto> request = new HttpEntity<>(noticeCreateDto, headers);
-
-    // When: Sending POST request with invalid input
-    ResponseEntity<String> response = restTemplate.postForEntity("http://localhost:" + port + "/notices", request, String.class);
-
-    // Then: The request should fail with 400 BAD REQUEST
-    assertEquals(400, response.getStatusCodeValue(), "The status code should be 400 BAD REQUEST for invalid input");
-  }
-
-  @Test
-  @DisplayName("공지사항 전체 조회 성공 통합 테스트")
-  void testGetAllNotices_Success() {
-    // Given: A notice saved in the repository
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .content("Test Content")
+  @DisplayName("공지사항 생성 성공 테스트")
+  void createNotice_Success() throws Exception {
+    NoticeResponseDto noticeResponseDto = NoticeResponseDto.builder()
+        .id(1L)
+        .title("Title")
+        .content("Content")
+        .author("Author")
         .startDate(LocalDateTime.now())
         .endDate(LocalDateTime.now().plusDays(1))
         .createdAt(LocalDateTime.now())
         .viewCount(0)
-        .author("Test Author")
-        .isDeleted(false)
+        .attachments(Collections.emptyList())
         .build();
-    noticeRepository.save(notice);
 
-    // When: Sending GET request to retrieve all notices
-    ResponseEntity<NoticeResponseDto[]> response = restTemplate.getForEntity("http://localhost:" + port + "/notices?page=0&size=10", NoticeResponseDto[].class);
+    MockMultipartFile noticeFile = new MockMultipartFile("notice", "", "application/json",
+        "{\"title\":\"Title\",\"content\":\"Content\",\"startDate\":\"2022-01-01T00:00:00\",\"endDate\":\"2022-01-02T00:00:00\",\"author\":\"Author\"}".getBytes());
+    MockMultipartFile file = new MockMultipartFile("files", "test.txt", "text/plain",
+        "some text".getBytes());
 
-    // Then: The notice list should contain the saved notice
-    assertEquals(200, response.getStatusCodeValue(), "The status code should be 200 OK");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals(1, response.getBody().length, "The number of notices should be 1");
-    assertEquals("Test Title", response.getBody()[0].getTitle(), "The title should match");
+    when(noticeService.createNotice(any(NoticeCreateDto.class), anyList())).thenReturn(
+        noticeResponseDto);
+
+    mockMvc.perform(multipart("/notices")
+            .file(noticeFile)
+            .file(file)
+            .contentType(MediaType.MULTIPART_FORM_DATA))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.title").value("Title"));
+
+    verify(noticeService, times(1)).createNotice(any(NoticeCreateDto.class), anyList());
   }
 
   @Test
-  @DisplayName("공지사항 조회 성공 통합 테스트")
-  void testGetNoticeById_Success() {
-    // Given: A notice saved in the repository with a specific ID
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .content("Test Content")
+  @DisplayName("공지사항 업데이트 성공 테스트")
+  void updateNotice_Success() throws Exception {
+    NoticeResponseDto noticeResponseDto = NoticeResponseDto.builder()
+        .id(1L)
+        .title("New Title")
+        .content("New Content")
+        .author("Author")
         .startDate(LocalDateTime.now())
         .endDate(LocalDateTime.now().plusDays(1))
         .createdAt(LocalDateTime.now())
         .viewCount(0)
-        .author("Test Author")
-        .isDeleted(false)
+        .attachments(Collections.emptyList())
         .build();
-    Notice savedNotice = noticeRepository.save(notice);
 
-    // When: Sending GET request to retrieve the notice by ID
-    ResponseEntity<NoticeDetailResponseDto> response = restTemplate.getForEntity("http://localhost:" + port + "/notices/" + savedNotice.getId(), NoticeDetailResponseDto.class);
+    MockMultipartFile noticeFile = new MockMultipartFile("notice", "", "application/json",
+        "{\"title\":\"New Title\",\"content\":\"New Content\",\"startDate\":\"2023-01-01T00:00:00\",\"endDate\":\"2023-01-02T00:00:00\",\"author\":\"Author\"}".getBytes());
+    MockMultipartFile file = new MockMultipartFile("files", "test.txt", "text/plain",
+        "some text".getBytes());
 
-    // Then: The retrieved notice should match the saved notice
-    assertEquals(200, response.getStatusCodeValue(), "The status code should be 200 OK");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals("Test Title", response.getBody().getTitle(), "The title should match");
+    when(noticeService.updateNotice(anyLong(), any(NoticeUpdateDto.class), any())).thenReturn(
+        noticeResponseDto);
+
+    mockMvc.perform(multipart("/notices/{id}", 1L)
+            .file(noticeFile)
+            .file(file)
+            .with(request -> {
+              request.setMethod("PUT");
+              return request;
+            })
+            .contentType(MediaType.MULTIPART_FORM_DATA))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.title").value("New Title"));
+
+    verify(noticeService, times(1)).updateNotice(anyLong(), any(NoticeUpdateDto.class), any());
   }
 
   @Test
-  @DisplayName("공지사항 조회 실패 통합 테스트 - 존재하지 않는 ID")
-  void testGetNoticeById_NotFound() {
-    // Given: A non-existing notice ID
+  @DisplayName("공지사항 업데이트 실패 테스트 - 존재하지 않는 ID")
+  void updateNotice_Failure_NotFound() throws Exception {
+    MockMultipartFile noticeFile = new MockMultipartFile("notice", "", "application/json", "{\"title\":\"New Title\",\"content\":\"New Content\",\"startDate\":\"2022-01-01T00:00:00\",\"endDate\":\"2022-01-02T00:00:00\",\"author\":\"Author\"}".getBytes());
+    MockMultipartFile file = new MockMultipartFile("files", "test.txt", "text/plain", "some text".getBytes());
 
-    // When: Sending GET request with a non-existing ID
-    ResponseEntity<String> response = restTemplate.getForEntity("http://localhost:" + port + "/notices/9999", String.class);
+    when(noticeService.updateNotice(anyLong(), any(NoticeUpdateDto.class), any())).thenThrow(new NoticeNotFoundException("Notice not found with id 1"));
 
-    // Then: The request should fail with 404 NOT FOUND
-    assertEquals(404, response.getStatusCodeValue(), "The status code should be 404 NOT FOUND for non-existing ID");
+    try {
+      mockMvc.perform(multipart("/notices/{id}", 1L)
+              .file(noticeFile)
+              .file(file)
+              .with(request -> {
+                request.setMethod("PUT");
+                return request;
+              })
+              .contentType(MediaType.MULTIPART_FORM_DATA))
+          .andExpect(status().isNotFound())
+          .andExpect(jsonPath("$.error").value("NoticeNotFound"))
+          .andExpect(jsonPath("$.message").value("Notice not found with id 1"));
+    } catch (Exception e) {
+      e.printStackTrace();  // 예외 스택 트레이스 출력
+      throw e;  // 예외 재발생
+    }
+
+    verify(noticeService, times(1)).updateNotice(anyLong(), any(NoticeUpdateDto.class), any());
   }
 
   @Test
-  @DisplayName("공지사항 검색 성공 통합 테스트")
-  void testSearchNotices_Success() {
-    // Given: A notice saved in the repository
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .content("Test Content")
+  @DisplayName("전체 공지사항 조회 성공 테스트")
+  void getAllNotices_Success() throws Exception {
+    NoticeResponseDto noticeResponseDto = NoticeResponseDto.builder()
+        .id(1L)
+        .title("Title")
+        .content("Content")
+        .author("Author")
         .startDate(LocalDateTime.now())
         .endDate(LocalDateTime.now().plusDays(1))
         .createdAt(LocalDateTime.now())
         .viewCount(0)
-        .author("Test Author")
-        .isDeleted(false)
+        .attachments(Collections.emptyList())
         .build();
-    noticeRepository.save(notice);
-    NoticeSearchDto searchDto = new NoticeSearchDto("Test Title", null, null, null, null);
+    List<NoticeResponseDto> notices = Collections.singletonList(noticeResponseDto);
 
-    // When: Sending GET request to search notices
-    ResponseEntity<NoticeResponseDto[]> response = restTemplate.getForEntity("http://localhost:" + port + "/notices/search?title=Test Title", NoticeResponseDto[].class);
+    when(noticeService.getAllNotices(anyInt(), anyInt())).thenReturn(notices);
 
-    // Then: The notice list should contain the matching notice
-    assertEquals(200, response.getStatusCodeValue(), "The status code should be 200 OK");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals(1, response.getBody().length, "The number of notices should be 1");
-    assertEquals("Test Title", response.getBody()[0].getTitle(), "The title should match");
+    mockMvc.perform(get("/notices")
+            .param("page", "0")
+            .param("size", "10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].title").value("Title"));
+
+    verify(noticeService, times(1)).getAllNotices(anyInt(), anyInt());
   }
 
   @Test
-  @DisplayName("공지사항 검색 실패 통합 테스트 - 일치하는 항목 없음")
-  void testSearchNotices_NoMatch() {
-    // Given: A search criteria with no matching notices
-    NoticeSearchDto searchDto = new NoticeSearchDto("Non-existing title", null, null, null, null);
+  @DisplayName("공지사항 상세 조회 성공 테스트")
+  void getNoticeById_Success() throws Exception {
+    NoticeDetailResponseDto noticeDetailResponseDto = NoticeDetailResponseDto.builder()
+        .id(1L)
+        .title("Title")
+        .content("Content")
+        .author("Author")
+        .startDate(LocalDateTime.now())
+        .endDate(LocalDateTime.now().plusDays(1))
+        .createdAt(LocalDateTime.now())
+        .attachments(Collections.emptyList())
+        .build();
 
-    // When: Sending GET request to search notices
-    ResponseEntity<NoticeResponseDto[]> response = restTemplate.getForEntity("http://localhost:" + port + "/notices/search?title=Non-existing title", NoticeResponseDto[].class);
+    when(noticeService.getNoticeDetailById(anyLong())).thenReturn(noticeDetailResponseDto);
 
-    // Then: The notice list should be empty
-    assertEquals(200, response.getStatusCodeValue(), "The status code should be 200 OK");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals(0, response.getBody().length, "The number of notices should be 0");
+    mockMvc.perform(get("/notices/{id}", 1L))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.title").value("Title"));
+
+    verify(noticeService, times(1)).getNoticeDetailById(anyLong());
   }
 
   @Test
-  @DisplayName("공지사항 업데이트 성공 통합 테스트")
-  void testUpdateNotice_Success() {
-    // Given: A notice saved in the repository
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .content("Test Content")
+  @DisplayName("공지사항 상세 조회 실패 테스트 - 존재하지 않는 ID")
+  void getNoticeById_Failure_NotFound() throws Exception {
+    when(noticeService.getNoticeDetailById(anyLong())).thenThrow(
+        new NoticeNotFoundException("Notice not found with id 1"));
+
+    mockMvc.perform(get("/notices/{id}", 1L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("NoticeNotFound"))
+        .andExpect(jsonPath("$.message").value("Notice not found with id 1"));
+
+    verify(noticeService, times(1)).getNoticeDetailById(anyLong());
+  }
+
+  @Test
+  @DisplayName("공지사항 검색 성공 테스트")
+  void searchNotices_Success() throws Exception {
+    NoticeResponseDto noticeResponseDto = NoticeResponseDto.builder()
+        .id(1L)
+        .title("Title")
+        .content("Content")
+        .author("Author")
         .startDate(LocalDateTime.now())
         .endDate(LocalDateTime.now().plusDays(1))
         .createdAt(LocalDateTime.now())
         .viewCount(0)
-        .author("Test Author")
-        .isDeleted(false)
+        .attachments(Collections.emptyList())
         .build();
-    Notice savedNotice = noticeRepository.save(notice);
+    List<NoticeResponseDto> notices = Collections.singletonList(noticeResponseDto);
 
-    NoticeUpdateDto updateDto = new NoticeUpdateDto("Updated Title", "Updated Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
-    HttpHeaders headers = new HttpHeaders();
-    headers.set("Content-Type", "application/json");
+    when(noticeService.searchNotices(any(NoticeSearchDto.class), anyInt(), anyInt())).thenReturn(
+        notices);
 
-    HttpEntity<NoticeUpdateDto> request = new HttpEntity<>(updateDto, headers);
+    mockMvc.perform(get("/notices/search")
+            .param("title", "Title")
+            .param("page", "0")
+            .param("size", "10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].title").value("Title"));
 
-    // When: Sending PUT request to update the notice
-    ResponseEntity<NoticeResponseDto> response = restTemplate.exchange("http://localhost:" + port + "/notices/" + savedNotice.getId(), HttpMethod.PUT, request, NoticeResponseDto.class);
-
-    // Then: The notice should be updated successfully
-    assertEquals(200, response.getStatusCodeValue(), "The status code should be 200 OK");
-    assertNotNull(response.getBody(), "The response body should not be null");
-    assertEquals("Updated Title", response.getBody().getTitle(), "The title should match");
+    verify(noticeService, times(1)).searchNotices(any(NoticeSearchDto.class), anyInt(), anyInt());
   }
 
   @Test
-  @DisplayName("공지사항 업데이트 실패 통합 테스트 - 존재하지 않는 ID")
-  void testUpdateNotice_NotFound() {
-    // Given: A non-existing notice ID
-    NoticeUpdateDto updateDto = new NoticeUpdateDto("Updated Title", "Updated Content", LocalDateTime.now(), LocalDateTime.now().plusDays(1));
-    HttpHeaders headers = new HttpHeaders();
-    headers.set("Content-Type", "application/json");
+  @DisplayName("공지사항 검색 실패 테스트 - 일치하는 항목 없음")
+  void searchNotices_Failure_NoMatch() throws Exception {
+    when(noticeService.searchNotices(any(NoticeSearchDto.class), anyInt(), anyInt())).thenReturn(
+        Collections.emptyList());
 
-    HttpEntity<NoticeUpdateDto> request = new HttpEntity<>(updateDto, headers);
+    mockMvc.perform(get("/notices/search")
+            .param("title", "Non-existing title")
+            .param("page", "0")
+            .param("size", "10"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.length()").value(0));
 
-    // When: Sending PUT request with a non-existing ID
-    ResponseEntity<String> response = restTemplate.exchange("http://localhost:" + port + "/notices/9999", HttpMethod.PUT, request, String.class);
-
-    // Then: The request should fail with 404 NOT FOUND
-    assertEquals(404, response.getStatusCodeValue(), "The status code should be 404 NOT FOUND for non-existing ID");
+    verify(noticeService, times(1)).searchNotices(any(NoticeSearchDto.class), anyInt(), anyInt());
   }
 
   @Test
-  @DisplayName("공지사항 삭제 성공 통합 테스트")
-  void testDeleteNotice_Success() {
-    // Given: A notice saved in the repository
-    Notice notice = Notice.builder()
-        .title("Test Title")
-        .content("Test Content")
-        .startDate(LocalDateTime.now())
-        .endDate(LocalDateTime.now().plusDays(1))
-        .createdAt(LocalDateTime.now())
-        .viewCount(0)
-        .author("Test Author")
-        .isDeleted(false)
-        .build();
-    Notice savedNotice = noticeRepository.save(notice);
+  @DisplayName("공지사항 삭제 성공 테스트")
+  void deleteNotice_Success() throws Exception {
+    doNothing().when(noticeService).deleteNotice(anyLong());
 
-    // When: Sending DELETE request to delete the notice
-    ResponseEntity<Void> response = restTemplate.exchange("http://localhost:" + port + "/notices/" + savedNotice.getId(), HttpMethod.DELETE, null, Void.class);
+    mockMvc.perform(delete("/notices/{id}", 1L))
+        .andExpect(status().isNoContent());
 
-    // Then: The notice should be deleted successfully
-    assertEquals(204, response.getStatusCodeValue(), "The status code should be 204 NO CONTENT");
+    verify(noticeService, times(1)).deleteNotice(anyLong());
   }
 
   @Test
-  @DisplayName("공지사항 삭제 실패 통합 테스트 - 존재하지 않는 ID")
-  void testDeleteNotice_NotFound() {
-    // Given: A non-existing notice ID
+  @DisplayName("공지사항 삭제 실패 테스트 - 존재하지 않는 ID")
+  void deleteNotice_Failure_NotFound() throws Exception {
+    doThrow(new NoticeNotFoundException("Notice not found with id 1")).when(noticeService)
+        .deleteNotice(anyLong());
 
-    // When: Sending DELETE request with a non-existing ID
-    ResponseEntity<String> response = restTemplate.exchange("http://localhost:" + port + "/notices/9999", HttpMethod.DELETE, null, String.class);
+    mockMvc.perform(delete("/notices/{id}", 1L))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.error").value("NoticeNotFound"))
+        .andExpect(jsonPath("$.message").value("Notice not found with id 1"));
 
-    // Then: The request should fail with 404 NOT FOUND
-    assertEquals(404, response.getStatusCodeValue(), "The status code should be 404 NOT FOUND for non-existing ID");
+    verify(noticeService, times(1)).deleteNotice(anyLong());
   }
 }
