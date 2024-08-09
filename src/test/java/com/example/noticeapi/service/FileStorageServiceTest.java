@@ -1,20 +1,21 @@
 package com.example.noticeapi.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import com.example.noticeapi.dto.FileDto;
 import com.example.noticeapi.entity.File;
 import com.example.noticeapi.entity.Notice;
 import com.example.noticeapi.exception.FileStorageException;
 import com.example.noticeapi.exception.InvalidFileNameException;
 import com.example.noticeapi.repository.FileRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.core.io.Resource;
-import org.springframework.mock.web.MockMultipartFile;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -22,11 +23,13 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletionException;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.springframework.core.io.Resource;
+import org.springframework.mock.web.MockMultipartFile;
 
 class FileStorageServiceTest {
 
@@ -47,7 +50,8 @@ class FileStorageServiceTest {
   @Test
   @DisplayName("파일 저장 성공 테스트")
   void storeFile_Success() throws Exception {
-    MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello, World!".getBytes());
+    MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain",
+        "Hello, World!".getBytes());
     String storedFileName = fileStorageService.storeFile(file).join();
 
     assertNotNull(storedFileName);
@@ -58,7 +62,8 @@ class FileStorageServiceTest {
   @Test
   @DisplayName("파일 저장 실패 테스트 - 잘못된 파일명")
   void storeFile_Failure_InvalidFileName() {
-    MockMultipartFile file = new MockMultipartFile("file", "../test.txt", "text/plain", "Hello, World!".getBytes());
+    MockMultipartFile file = new MockMultipartFile("file", "../test.txt", "text/plain",
+        "Hello, World!".getBytes());
 
     CompletionException thrown = assertThrows(CompletionException.class, () -> {
       fileStorageService.storeFile(file).join();
@@ -133,12 +138,14 @@ class FileStorageServiceTest {
   @Test
   @DisplayName("공지사항의 파일 처리 성공 테스트")
   void processFiles_Success() throws Exception {
-    MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain", "Hello, World!".getBytes());
+    MockMultipartFile file = new MockMultipartFile("file", "test.txt", "text/plain",
+        "Hello, World!".getBytes());
     Notice notice = Notice.builder().id(1L).build();
 
     when(fileRepository.save(any(File.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-    List<File> processedFiles = fileStorageService.processFiles(Collections.singletonList(file), notice).join();
+    List<File> processedFiles = fileStorageService.processFiles(Collections.singletonList(file),
+        notice).join();
 
     assertNotNull(processedFiles);
     assertEquals(1, processedFiles.size());

@@ -142,10 +142,13 @@ class NoticeControllerTest {
   @Test
   @DisplayName("공지사항 업데이트 실패 테스트 - 존재하지 않는 ID")
   void updateNotice_Failure_NotFound() throws Exception {
-    MockMultipartFile noticeFile = new MockMultipartFile("notice", "", "application/json", "{\"title\":\"New Title\",\"content\":\"New Content\",\"startDate\":\"2022-01-01T00:00:00\",\"endDate\":\"2022-01-02T00:00:00\",\"author\":\"Author\"}".getBytes());
-    MockMultipartFile file = new MockMultipartFile("files", "test.txt", "text/plain", "some text".getBytes());
+    MockMultipartFile noticeFile = new MockMultipartFile("notice", "", "application/json",
+        "{\"title\":\"New Title\",\"content\":\"New Content\",\"startDate\":\"2022-01-01T00:00:00\",\"endDate\":\"2022-01-02T00:00:00\",\"author\":\"Author\"}".getBytes());
+    MockMultipartFile file = new MockMultipartFile("files", "test.txt", "text/plain",
+        "some text".getBytes());
 
-    when(noticeService.updateNotice(anyLong(), any(NoticeUpdateDto.class), any())).thenThrow(new NoticeNotFoundException("Notice not found with id 1"));
+    when(noticeService.updateNotice(anyLong(), any(NoticeUpdateDto.class), any())).thenThrow(
+        new NoticeNotFoundException("Notice not found with id 1"));
 
     try {
       mockMvc.perform(multipart("/notices/{id}", 1L)

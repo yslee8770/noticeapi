@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class NoticeUpdateDto {
+
   @NotEmpty(message = "Title is required")
   private String title;
 

@@ -1,6 +1,7 @@
 package com.example.noticeapi.config;
 
 public class DataSourceContextHolder {
+
   private static final ThreadLocal<String> contextHolder = new ThreadLocal<>();
 
   public static void setDataSourceType(String dataSourceType) {

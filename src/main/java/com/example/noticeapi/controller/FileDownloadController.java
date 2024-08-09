@@ -3,7 +3,6 @@ package com.example.noticeapi.controller;
 import com.example.noticeapi.dto.FileDto;
 import com.example.noticeapi.service.FileStorageService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;

@@ -1,8 +1,16 @@
 package com.example.noticeapi.controller;
 
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
 import com.example.noticeapi.dto.FileDto;
 import com.example.noticeapi.exception.FileNotFoundException;
 import com.example.noticeapi.service.FileStorageService;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -14,12 +22,6 @@ import org.springframework.core.io.Resource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
-
-import java.util.concurrent.CompletableFuture;
-
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(FileDownloadController.class)
 public class FileDownloadControllerTest {
@@ -50,7 +52,8 @@ public class FileDownloadControllerTest {
     Resource resource = new ByteArrayResource("This is a test file content".getBytes());
 
     when(fileStorageService.getFileDtoById(1L)).thenReturn(fileDto);
-    when(fileStorageService.loadFileAsResource("test.txt")).thenReturn(CompletableFuture.completedFuture(resource));
+    when(fileStorageService.loadFileAsResource("test.txt")).thenReturn(
+        CompletableFuture.completedFuture(resource));
 
     mockMvc.perform(get("/files/download/1"))
         .andExpect(status().isOk())
@@ -61,7 +64,8 @@ public class FileDownloadControllerTest {
 
   @Test
   public void downloadFile_FileNotFound() throws Exception {
-    when(fileStorageService.getFileDtoById(1L)).thenThrow(new FileNotFoundException("File not found"));
+    when(fileStorageService.getFileDtoById(1L)).thenThrow(
+        new FileNotFoundException("File not found"));
 
     mockMvc.perform(get("/files/download/1"))
         .andExpect(status().isNotFound())

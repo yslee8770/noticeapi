@@ -60,6 +60,7 @@ public class GlobalExceptionHandler {
   public ResponseEntity<String> handleFileNotFoundException(FileNotFoundException ex) {
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_TYPE, "application/json");
-    return ResponseEntity.status(HttpStatus.NOT_FOUND).headers(headers).body("{\"error\": \"FileNotFoundException\", \"message\": \"" + ex.getMessage() + "\"}");
+    return ResponseEntity.status(HttpStatus.NOT_FOUND).headers(headers)
+        .body("{\"error\": \"FileNotFoundException\", \"message\": \"" + ex.getMessage() + "\"}");
   }
 }
